@@ -5,6 +5,7 @@ import asyncio
 from config_data.config import Config, load_config
 import logging
 from database import db_functions
+from pytz import timezone
 
 # Загружаем конфиг в переменную config
 config: Config = load_config()
@@ -12,7 +13,9 @@ config: Config = load_config()
 # Инициализируем бот и диспетчер
 bot: Bot = Bot(token=config.tg_bot.token)
 
-scheduler = AsyncIOScheduler()
+moscow_tz = timezone('Europe/Moscow')
+
+scheduler = AsyncIOScheduler(timezone=moscow_tz)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)

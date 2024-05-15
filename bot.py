@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import aiohttp
 
 from aiogram import Bot, Dispatcher
 from config_data.config import Config, load_config
@@ -43,8 +42,7 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
-    async with aiohttp.ClientSession():
-        pass
+    await bot.session.close()
 
 
 if __name__ == '__main__':
