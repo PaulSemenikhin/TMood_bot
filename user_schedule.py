@@ -14,7 +14,7 @@ bot: Bot = Bot(token=config.tg_bot.token)
 
 scheduler = AsyncIOScheduler()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
