@@ -1,54 +1,49 @@
-import asyncio
-import aioschedule as schedule
-from aiogram import Bot
-from aiogram import types
 import datetime
+import io
+import logging
 import re
-import sqlite3
-from sqlalchemy import create_engine, text
+
 import pandas as pd
 import seaborn as sns
-from aiogram.types import BufferedInputFile
-import io
-from matplotlib.pyplot import savefig
 from matplotlib import pyplot as plt
-import user_schedule
-import qrcode
-import logging
-from bot import Bot
+from sqlalchemy import create_engine, text
 
-from aiogram import Router, Dispatcher
+from aiogram import Bot, Router, types
 from aiogram.filters import Command, CommandStart, Text
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove, ReplyKeyboardMarkup
+from aiogram.types import Message, ReplyKeyboardRemove
 
+import user_schedule
 from keyboards import keyboards
 from database import db_functions
 from lexicon.lexicon import LEXICON
 
+
 router: Router = Router()
 
 
-# Этот хэндлер будет срабатывать на команду "/start" -
+# Хэндлер, срабатывающий на команду "/start" -
 # добавляет пользователя в БД, если его там еще не было
 # и отправляет ему приветственное сообщение
 @router.message(CommandStart())
 async def process_start_command(message: Message):
     await message.answer(LEXICON['/start'])
-    user_id = message.from_user.id
+    user_id = message.from_user.id  # type: ignore
     if not await db_functions.check_user_exists(user_id):
         await db_functions.add_new_user(user_id)
     await message.answer(LEXICON['start_settings_button'],
                          reply_markup=keyboards.start_choice)
 
 
-# Этот хэндлер будет срабатывать на команду "/help"
-# и отправлять пользователю сообщение со списком доступных команд в боте
+# Хэндлер, срабатывающий на команду "/help" -
+# отправляет пользователю сообщение со списком доступных команд в боте
 @router.message(Command(commands='help'))
 @router.message(Text(text='🛟Помощь'))
 async def process_help_command(message: Message):
     await message.answer(LEXICON['/help'])
 
 
+# Хэндлер, срабатывающий на команду "/settime" и текст "Да😊" или "⏰Время уведомлений" -
+# отправляет сообщение с кнопками выбора времени уведомлений
 @router.message(Text(text='Да😊'))
 @router.message(Command(commands='settime'))
 @router.message(Text(text='⏰Время уведомлений'))
@@ -57,20 +52,25 @@ async def process_setting_command_yes(message: Message):
                                             resize_keyboard=True))
 
 
+# Хэндлер, срабатывающий на текст "Нет😒" -
+# убирает клавиатуру и отправляет сообщение об отказе от выбора
 @router.message(Text(text='Нет😒'))
 async def process_setting_command_no(message: Message):
     await message.answer(LEXICON['no_choice'],
                          reply_markup=ReplyKeyboardRemove(remove_keyboard=True))
 
 
+# Хэндлер, срабатывающий на сообщения, содержащие время в формате HH:MM -
+# обновляет время уведомлений в БД и планировщике
 @router.message(lambda message: re.match(r"\d{1,2}:\d{2}", message.text))
 async def process_time_message(message: Message):
     logger = logging.getLogger(__name__)
 
-    time_str = message.text.strip()
+    time_str = message.text.strip()  # type: ignore
+
+    user_id = message.from_user.id  # type: ignore
 
     try:
-        user_id = message.from_user.id
 
         # Log received user ID and time
         logger.info(f"Updating time notification for user ID: {user_id}, New time: {time_str}")
@@ -89,14 +89,18 @@ async def process_time_message(message: Message):
                              '\nПожалуйста, введите время в формате HH:MM.')
 
 
+# Хэндлер, срабатывающий на команду "/deletenotification" и текст "🚫Убрать напоминания" -
+# удаляет уведомления для пользователя
 @router.message(Command(commands='deletenotification'))
 @router.message(Text(text='🚫Убрать напоминания'))
 async def process_deletion_notification(message: Message):
-    user_id = message.from_user.id
+    user_id = message.from_user.id  # type: ignore
     await user_schedule.delete_notification(user_id)
     await message.answer('Я больше не буду напоминать внести запись о настроении😞')
 
 
+# Хэндлер, срабатывающий на команду "/mood" и текст "📝Внести запись" -
+# отправляет сообщение с кнопками для записи настроения
 @router.message(Command(commands='mood'))
 @router.message(Text(text='📝Внести запись'))
 async def process_write_record(message: Message):
@@ -104,10 +108,12 @@ async def process_write_record(message: Message):
                                             resize_keyboard=True))
 
 
+# Хэндлер, срабатывающий на сообщения с оценкой настроения (1-10) -
+# добавляет запись настроения в БД и проверяет уровень депрессии
 @router.message(lambda message: message.text.isdigit() and 1 <= int(message.text) <= 10)
 async def process_mood_score(message: Message):
-    mood_score = int(message.text)
-    user_id = message.from_user.id
+    mood_score = int(message.text)  # type: ignore
+    user_id = message.from_user.id  # type: ignore
     current_date = datetime.datetime.now().date()
 
     try:
@@ -119,11 +125,14 @@ async def process_mood_score(message: Message):
         first_launch_time = await db_functions.get_first_launch_time(user_id)
         days_since_first_launch = current_date - first_launch_time
 
-        # Проверяем, если было отправлено сообщение о депрессии
+        # Проверяем, было ли уже отправлено сообщение о депрессии
         if await db_functions.depression_notification(user_id):
-            last_depression_time = datetime.datetime.strptime(await db_functions.get_time_depression(user_id), "%Y-%m-%d").date()
+            last_depression_time = datetime.datetime.strptime(
+                    await db_functions.get_time_depression(user_id),
+                    "%Y-%m-%d"
+                ).date()
             days_since_last_depression = current_date - last_depression_time
-
+            # Если прошло менее 7 дней с момента запуска бота, то далее не обрабатываем
             if days_since_first_launch.days < 7:
                 return
 
@@ -153,11 +162,13 @@ async def process_mood_score(message: Message):
         print(f"Ошибка при добавлении записи о настроении: {e}")
 
 
+# Хэндлер, срабатывающий на команду "/delete" и текст "❌Удалить запись" -
+# удаляет последнюю запись настроения пользователя
 @router.message(Command(commands='delete'))
 @router.message(Text(text='❌Удалить запись'))
 async def process_delete_last_record(message: Message):
     try:
-        await db_functions.delete_last_record(message.from_user.id)
+        await db_functions.delete_last_record(message.from_user.id)  # type: ignore
         await message.answer(LEXICON['entry_deleted'])
     except Exception as e:
         await message.answer('Произошла ошибка при удалении '
@@ -165,24 +176,19 @@ async def process_delete_last_record(message: Message):
         print(f"Ошибка при удалении записи о настроении: {e}")
 
 
-def make_qr(text: str) -> BufferedInputFile:
-    with io.BytesIO() as buffer:
-        qr_code_img = qrcode.make(text)
-        qr_code_img.save(buffer, format='PNG')
-        buffer.seek(0)
-        return BufferedInputFile(buffer.getvalue(), filename='qrcode.png')
-
-
+# Хэндлер, срабатывающий на команду "/chart" и текст "📈График настроения" -
+# генерирует и отправляет пользователю график настроения за последние 30 дней
 @router.message(Command(commands='chart'))
 @router.message(Text(text='📈График настроения'))
 async def get_chart(message: Message, bot: Bot):
+    
     engine = create_engine("sqlite:///data.db")
 
     # Загрузка данных
     query = text("SELECT * FROM moods WHERE user_id = :user_id")
     df = pd.read_sql_query(query, engine, params={"user_id": message.chat.id})
 
-    # Convert date
+    # Конвертация даты
     df['date'] = pd.to_datetime(df['date'])
 
     # Фильтрация данных за последние 30 дней
