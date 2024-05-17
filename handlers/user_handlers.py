@@ -181,7 +181,7 @@ async def process_delete_last_record(message: Message):
 @router.message(Command(commands='chart'))
 @router.message(Text(text='📈График настроения'))
 async def get_chart(message: Message, bot: Bot):
-    
+
     engine = create_engine("sqlite:///data.db")
 
     # Загрузка данных
