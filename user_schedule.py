@@ -18,7 +18,7 @@ moscow_tz = timezone('Europe/Moscow')
 # Инициализируем планировщика
 scheduler = AsyncIOScheduler(timezone=moscow_tz)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -52,10 +52,15 @@ async def update_notification(user_id, time_str):
 
 # Отправляет сообщение пользователю с напоминанием внести запись
 async def notify_user(user_id, message_text='Как прошел ваш день?'):
-    await bot.send_message(user_id, message_text)
+    try:
+        await bot.send_message(user_id, message_text)
+    except Exception as e:
+        logger.error(f"Failed to send message to user {user_id}: {e}")
 
 
 async def main():
+
+    scheduler.start()
 
     users = await db_functions.get_time_notify_not_null()
 
@@ -64,11 +69,10 @@ async def main():
         hour, minute = map(int, time_notify.split(':'))
         scheduler.add_job(notify_user, 'cron', args=[user_id], id=f'{user_id}', hour=hour, minute=minute)
 
-    scheduler.start()
     for job in scheduler.get_jobs():
         print(job.id)
 
 
 if __name__ == '__main__':
-    asyncio.create_task(periodic_task())
     asyncio.run(main())
+    asyncio.create_task(periodic_task())

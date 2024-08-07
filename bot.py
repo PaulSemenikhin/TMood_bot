@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 async def main():
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(filename)s:%(lineno)d #%(levelname)-8s '
                '[%(asctime)s] - :%(funcName)s - %(name)s - %(message)s')
 
@@ -40,10 +40,15 @@ async def main():
     # Запускаем расписание уведомлений
     await user_schedule.main()
 
-    await dp.start_polling(bot)
-
-    await bot.session.close()
-
+    try:
+        await dp.start_polling(bot)
+    except (KeyboardInterrupt, SystemExit):
+        logger.warning('Received SIGINT or SIGTERM')
+    finally:
+        # Корректно закрываем сессии и диспетчер
+        await bot.session.close()
+        await dp.storage.close()
+        logger.info('Bot stopped')
 
 if __name__ == '__main__':
     asyncio.run(main())
